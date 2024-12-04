@@ -6,7 +6,7 @@ version = "1.0.0"
 #
 description = "Utilities to create encoders and decoders from basic and complex types"
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "Billuc", repo = "convert", path = "convert" }
+repository = { type = "github", user = "Billuc", repo = "convert" }
 links = [{ title = "Website", href = "https://hexdocs.pm/convert" }]
 #
 # For a full reference of all the available options, you can have a look at
