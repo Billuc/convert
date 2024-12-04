@@ -1,7 +1,7 @@
 # convert
 
-[![Package Version](https://img.shields.io/hexpm/v/glitr_convert)](https://hex.pm/packages/glitr_convert)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/glitr_convert/)
+[![Package Version](https://img.shields.io/hexpm/v/convert)](https://hex.pm/packages/convert)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/convert/)
 
 **Encode and decode from and to Gleam types effortlessly !**
 
