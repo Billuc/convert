@@ -5,7 +5,7 @@ version = "1.0.0"
 # your project to the Hex package manager.
 #
 description = "Utilities to create encoders and decoders from basic and complex types"
-licences = ["Apache 2.0"]
+licences = ["Apache-2.0"]
 repository = { type = "github", user = "Billuc", repo = "convert", path = "convert" }
 links = [{ title = "Website", href = "https://hexdocs.pm/convert" }]
 #
