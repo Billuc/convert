@@ -51,16 +51,11 @@ Further documentation can be found at <https://hexdocs.pm/convert>.
 ## Features
 
 - Javascript and Erlang targets
-- Converters for all basic types (except BitArray)
+- Converters for all basic types
 - Define converters for List, Dict, Result & Option
-- Build decoders for custom objects and enums
-- Encode and decode to JSON.
+- Build converters for custom objects and enums
 
 ## Potential developments
-
-- Add BitArray support
-- Add Tuple support
-- Add Yaml conversion
 
 Feel free to open PRs and issues if you want more features !
 
