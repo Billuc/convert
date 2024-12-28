@@ -345,7 +345,7 @@ pub fn dict(
               | Error(errs_1), Ok(_), Error(errs_2)
               -> Error(list.append(errs_1, errs_2))
               Error(errs), Error(errs_k), Error(errs_v) ->
-                Error(list.concat([errs, errs_k, errs_v]))
+                Error(list.flatten([errs, errs_k, errs_v]))
             }
           })
           |> result.map(dict.from_list)
