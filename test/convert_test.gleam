@@ -19,7 +19,7 @@ pub fn simple_object_encode_test() {
     })
 
   TestType("hello", 78)
-  |> convert.encode(test_converter)
+  |> convert.to_value(test_converter)
   |> should.equal(
     convert.ObjectValue([
       #("a", convert.StringValue("hello")),
@@ -58,7 +58,7 @@ pub fn simple_tuple_test() {
     })
 
   #(42, "lorem ipsum")
-  |> convert.encode(test_converter)
+  |> convert.to_value(test_converter)
   |> should.equal(
     convert.ObjectValue([
       #("0", convert.IntValue(42)),
@@ -100,7 +100,7 @@ pub fn complex_type_encode_test() {
     })
 
   ComplexType(["Adam", "Bob", "Carmen", "Dorothy"], TestType("Grade", 15))
-  |> convert.encode(test_converter)
+  |> convert.to_value(test_converter)
   |> should.equal(
     convert.ObjectValue([
       #(
@@ -171,11 +171,11 @@ pub fn converter_map_test() {
   }
 
   Date(2024, 10, 30)
-  |> convert.encode(date_converter)
+  |> convert.to_value(date_converter)
   |> should.equal(convert.StringValue("2024/10/30"))
 
   convert.StringValue("2013/10/29")
-  |> convert.decode(date_converter)
+  |> convert.from_value(date_converter)
   |> should.be_ok
   |> should.equal(Date(2013, 10, 29))
 }

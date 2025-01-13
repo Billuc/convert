@@ -7,19 +7,19 @@ import gleam/string
 
 /// This type is used to define the shape of the data.  
 /// It isn't meant to be used directly !  
-/// It is better to use converters that use GlitrTypes internally to decode data.
-pub type GlitrType {
+/// It is better to use converters that use ConvertTypes internally to decode data.
+pub type ConvertType {
   String
   Bool
   Float
   Int
   Null
-  List(of: GlitrType)
-  Dict(key: GlitrType, value: GlitrType)
-  Object(fields: List(#(String, GlitrType)))
-  Optional(of: GlitrType)
-  Result(result: GlitrType, error: GlitrType)
-  Enum(variants: List(#(String, GlitrType)))
+  List(of: ConvertType)
+  Dict(key: ConvertType, value: ConvertType)
+  Object(fields: List(#(String, ConvertType)))
+  Optional(of: ConvertType)
+  Result(result: ConvertType, error: ConvertType)
+  Enum(variants: List(#(String, ConvertType)))
   Dynamic
   BitArray
 }
@@ -27,18 +27,18 @@ pub type GlitrType {
 /// This type is used to represent data values.  
 /// It is an intermediate type between encoded data and Gleam types.
 /// It isn't meant to be used directly !  
-pub type GlitrValue {
+pub type ConvertValue {
   StringValue(value: String)
   BoolValue(value: Bool)
   FloatValue(value: Float)
   IntValue(value: Int)
   NullValue
-  ListValue(value: List(GlitrValue))
-  DictValue(value: dict.Dict(GlitrValue, GlitrValue))
-  ObjectValue(value: List(#(String, GlitrValue)))
-  OptionalValue(value: option.Option(GlitrValue))
-  ResultValue(value: Result(GlitrValue, GlitrValue))
-  EnumValue(variant: String, value: GlitrValue)
+  ListValue(value: List(ConvertValue))
+  DictValue(value: dict.Dict(ConvertValue, ConvertValue))
+  ObjectValue(value: List(#(String, ConvertValue)))
+  OptionalValue(value: option.Option(ConvertValue))
+  ResultValue(value: Result(ConvertValue, ConvertValue))
+  EnumValue(variant: String, value: ConvertValue)
   DynamicValue(value: dynamic.Dynamic)
   BitArrayValue(value: BitArray)
 }
@@ -47,9 +47,9 @@ pub type GlitrValue {
 /// You can build converters using the provided constructors.
 pub opaque type Converter(a) {
   Converter(
-    encoder: fn(a) -> GlitrValue,
-    decoder: fn(GlitrValue) -> Result(a, List(dynamic.DecodeError)),
-    type_def: GlitrType,
+    encoder: fn(a) -> ConvertValue,
+    decoder: fn(ConvertValue) -> Result(a, List(dynamic.DecodeError)),
+    type_def: ConvertType,
     // Temporary ugly stuff, while searching for a better solution
     default_value: a,
   )
@@ -58,11 +58,18 @@ pub opaque type Converter(a) {
 /// Intermediate type to build a converter for an object type
 pub opaque type PartialConverter(base) {
   PartialConverter(
-    encoder: fn(base) -> GlitrValue,
-    decoder: fn(GlitrValue) -> Result(base, List(dynamic.DecodeError)),
-    fields_def: List(#(String, GlitrType)),
+    encoder: fn(base) -> ConvertValue,
+    decoder: fn(ConvertValue) -> Result(base, List(dynamic.DecodeError)),
+    fields_def: List(#(String, ConvertType)),
     // Temporary ugly stuff, while searching for a better solution
     default_value: Result(base, List(dynamic.DecodeError)),
+  )
+}
+
+pub type FormatterParser(format_type, parse_type) {
+  FormatterParser(
+    format: fn(ConvertValue, ConvertType) -> format_type,
+    parse: fn(parse_type, ConvertType) -> ConvertValue,
   )
 }
 
@@ -123,7 +130,7 @@ pub fn field(
         }
       }
     },
-    decoder: fn(v: GlitrValue) {
+    decoder: fn(v: ConvertValue) {
       case v {
         ObjectValue(values) -> {
           let field_value =
@@ -161,7 +168,7 @@ pub fn success(c: a) -> PartialConverter(a) {
 pub fn string() -> Converter(String) {
   Converter(
     fn(v: String) { StringValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         StringValue(val) -> Ok(val)
         other ->
@@ -177,7 +184,7 @@ pub fn string() -> Converter(String) {
 pub fn bool() -> Converter(Bool) {
   Converter(
     fn(v: Bool) { BoolValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         BoolValue(val) -> Ok(val)
         other -> Error([dynamic.DecodeError("BoolValue", get_type(other), [])])
@@ -192,7 +199,7 @@ pub fn bool() -> Converter(Bool) {
 pub fn float() -> Converter(Float) {
   Converter(
     fn(v: Float) { FloatValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         FloatValue(val) -> Ok(val)
         other -> Error([dynamic.DecodeError("FloatValue", get_type(other), [])])
@@ -207,7 +214,7 @@ pub fn float() -> Converter(Float) {
 pub fn int() -> Converter(Int) {
   Converter(
     fn(v: Int) { IntValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         IntValue(val) -> Ok(val)
         other -> Error([dynamic.DecodeError("IntValue", get_type(other), [])])
@@ -222,7 +229,7 @@ pub fn int() -> Converter(Int) {
 pub fn null() -> Converter(Nil) {
   Converter(
     fn(_: Nil) { NullValue },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         NullValue -> Ok(Nil)
         other -> Error([dynamic.DecodeError("NullValue", get_type(other), [])])
@@ -239,7 +246,7 @@ pub fn null() -> Converter(Nil) {
 pub fn list(of: Converter(a)) -> Converter(List(a)) {
   Converter(
     fn(v: List(a)) { ListValue(v |> list.map(of.encoder)) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         ListValue(vals) ->
           vals
@@ -264,7 +271,7 @@ pub fn list(of: Converter(a)) -> Converter(List(a)) {
 pub fn optional(of: Converter(a)) -> Converter(option.Option(a)) {
   Converter(
     fn(v: option.Option(a)) { OptionalValue(v |> option.map(of.encoder)) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         OptionalValue(option.None) -> Ok(option.None)
         OptionalValue(option.Some(val)) ->
@@ -292,7 +299,7 @@ pub fn result(
         v |> result.map(res.encoder) |> result.map_error(error.encoder),
       )
     },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         ResultValue(Ok(val)) -> val |> res.decoder |> result.map(Ok)
         ResultValue(Error(val)) -> val |> error.decoder |> result.map(Error)
@@ -327,7 +334,7 @@ pub fn dict(
         |> dict.from_list,
       )
     },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         DictValue(d) ->
           d
@@ -415,7 +422,7 @@ pub fn enum(
         Error(_) -> NullValue
       }
     },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         EnumValue(variant_name, value) -> {
           use variant <- result.try(
@@ -447,7 +454,7 @@ pub fn enum(
 pub fn dynamic() -> Converter(dynamic.Dynamic) {
   Converter(
     fn(v: dynamic.Dynamic) { DynamicValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         DynamicValue(val) -> Ok(val)
         other ->
@@ -463,7 +470,7 @@ pub fn dynamic() -> Converter(dynamic.Dynamic) {
 pub fn bit_array() -> Converter(BitArray) {
   Converter(
     fn(v: BitArray) { BitArrayValue(v) },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       case v {
         BitArrayValue(val) -> Ok(val)
         other ->
@@ -511,7 +518,7 @@ pub fn map(
       let a_value = encode_map(v)
       converter.encoder(a_value)
     },
-    fn(v: GlitrValue) {
+    fn(v: ConvertValue) {
       converter.decoder(v)
       |> result.then(decode_map)
     },
@@ -520,7 +527,7 @@ pub fn map(
   )
 }
 
-fn get_type(val: GlitrValue) -> String {
+fn get_type(val: ConvertValue) -> String {
   case val {
     BoolValue(_) -> "BoolValue"
     DictValue(_) -> "DictValue"
@@ -538,20 +545,41 @@ fn get_type(val: GlitrValue) -> String {
   }
 }
 
-/// Encode a value into the corresponding GlitrValue using the converter.  
+/// Encode a value into the corresponding ConvertValue using the converter.  
 /// If the converter isn't valid, a NullValue is returned.
-pub fn encode(converter: Converter(a)) -> fn(a) -> GlitrValue {
+pub fn to_value(converter: Converter(a)) -> fn(a) -> ConvertValue {
   converter.encoder
 }
 
-/// Decode a GlitrValue using the provided converter.
-pub fn decode(
+/// Decode a ConvertValue using the provided converter.
+pub fn from_value(
   converter: Converter(a),
-) -> fn(GlitrValue) -> Result(a, List(dynamic.DecodeError)) {
+) -> fn(ConvertValue) -> Result(a, List(dynamic.DecodeError)) {
   converter.decoder
 }
 
-/// Return the GlitrType associated with the converter
-pub fn type_def(converter: Converter(a)) -> GlitrType {
+pub fn encode(
+  value: a,
+  converter: Converter(a),
+  fp: FormatterParser(ft, pt),
+) -> ft {
+  value
+  |> to_value(converter)
+  |> fp.format(converter |> type_def)
+}
+
+pub fn decode(
+  converter: Converter(a),
+  fp: FormatterParser(ft, pt),
+) -> fn(pt) -> Result(a, List(dynamic.DecodeError)) {
+  fn(value: pt) {
+    value
+    |> fp.parse(converter |> type_def)
+    |> from_value(converter)
+  }
+}
+
+/// Return the ConvertType associated with the converter
+pub fn type_def(converter: Converter(a)) -> ConvertType {
   converter.type_def
 }
