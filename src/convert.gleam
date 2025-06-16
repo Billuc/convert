@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/dynamic
+import gleam/dynamic/decode
 import gleam/list
 import gleam/option
 import gleam/result
@@ -13,6 +14,8 @@ pub type GlitrType {
   Bool
   Float
   Int
+  Dynamic
+  BitArray
   Null
   List(of: GlitrType)
   Dict(key: GlitrType, value: GlitrType)
@@ -20,8 +23,6 @@ pub type GlitrType {
   Optional(of: GlitrType)
   Result(result: GlitrType, error: GlitrType)
   Enum(variants: List(#(String, GlitrType)))
-  Dynamic
-  BitArray
 }
 
 /// This type is used to represent data values.  
@@ -32,6 +33,8 @@ pub type GlitrValue {
   BoolValue(value: Bool)
   FloatValue(value: Float)
   IntValue(value: Int)
+  DynamicValue(value: dynamic.Dynamic)
+  BitArrayValue(value: BitArray)
   NullValue
   ListValue(value: List(GlitrValue))
   DictValue(value: dict.Dict(GlitrValue, GlitrValue))
@@ -39,8 +42,6 @@ pub type GlitrValue {
   OptionalValue(value: option.Option(GlitrValue))
   ResultValue(value: Result(GlitrValue, GlitrValue))
   EnumValue(variant: String, value: GlitrValue)
-  DynamicValue(value: dynamic.Dynamic)
-  BitArrayValue(value: BitArray)
 }
 
 /// A converter is an object with the data necessary to encode and decode a specific Gleam type.  
@@ -48,7 +49,7 @@ pub type GlitrValue {
 pub opaque type Converter(a) {
   Converter(
     encoder: fn(a) -> GlitrValue,
-    decoder: fn(GlitrValue) -> Result(a, List(dynamic.DecodeError)),
+    decoder: fn(GlitrValue) -> Result(a, List(decode.DecodeError)),
     type_def: GlitrType,
     // Temporary ugly stuff, while searching for a better solution
     default_value: a,
@@ -59,10 +60,10 @@ pub opaque type Converter(a) {
 pub opaque type PartialConverter(base) {
   PartialConverter(
     encoder: fn(base) -> GlitrValue,
-    decoder: fn(GlitrValue) -> Result(base, List(dynamic.DecodeError)),
+    decoder: fn(GlitrValue) -> Result(base, List(decode.DecodeError)),
     fields_def: List(#(String, GlitrType)),
     // Temporary ugly stuff, while searching for a better solution
-    default_value: Result(base, List(dynamic.DecodeError)),
+    default_value: Result(base, List(decode.DecodeError)),
   )
 }
 
@@ -130,7 +131,7 @@ pub fn field(
             values
             |> list.key_find(field_name)
             |> result.replace_error([
-              dynamic.DecodeError("Value", "None", [field_name]),
+              decode.DecodeError("Value", "None", [field_name]),
             ])
             |> result.then(field_type.decoder)
 
@@ -164,8 +165,7 @@ pub fn string() -> Converter(String) {
     fn(v: GlitrValue) {
       case v {
         StringValue(val) -> Ok(val)
-        other ->
-          Error([dynamic.DecodeError("StringValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("StringValue", get_type(other), [])])
       }
     },
     String,
@@ -180,7 +180,7 @@ pub fn bool() -> Converter(Bool) {
     fn(v: GlitrValue) {
       case v {
         BoolValue(val) -> Ok(val)
-        other -> Error([dynamic.DecodeError("BoolValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("BoolValue", get_type(other), [])])
       }
     },
     Bool,
@@ -195,7 +195,7 @@ pub fn float() -> Converter(Float) {
     fn(v: GlitrValue) {
       case v {
         FloatValue(val) -> Ok(val)
-        other -> Error([dynamic.DecodeError("FloatValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("FloatValue", get_type(other), [])])
       }
     },
     Float,
@@ -210,11 +210,43 @@ pub fn int() -> Converter(Int) {
     fn(v: GlitrValue) {
       case v {
         IntValue(val) -> Ok(val)
-        other -> Error([dynamic.DecodeError("IntValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("IntValue", get_type(other), [])])
       }
     },
     Int,
     0,
+  )
+}
+
+/// Basic converter for Dynamic values
+pub fn dynamic() -> Converter(dynamic.Dynamic) {
+  Converter(
+    fn(v: dynamic.Dynamic) { DynamicValue(v) },
+    fn(v: GlitrValue) {
+      case v {
+        DynamicValue(val) -> Ok(val)
+        other ->
+          Error([decode.DecodeError("DynamicValue", get_type(other), [])])
+      }
+    },
+    Dynamic,
+    dynamic.nil(),
+  )
+}
+
+/// Basic converter for BitArray values
+pub fn bit_array() -> Converter(BitArray) {
+  Converter(
+    fn(v: BitArray) { BitArrayValue(v) },
+    fn(v: GlitrValue) {
+      case v {
+        BitArrayValue(val) -> Ok(val)
+        other ->
+          Error([decode.DecodeError("BitArrayValue", get_type(other), [])])
+      }
+    },
+    BitArray,
+    <<>>,
   )
 }
 
@@ -225,7 +257,7 @@ pub fn null() -> Converter(Nil) {
     fn(v: GlitrValue) {
       case v {
         NullValue -> Ok(Nil)
-        other -> Error([dynamic.DecodeError("NullValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("NullValue", get_type(other), [])])
       }
     },
     Null,
@@ -250,7 +282,7 @@ pub fn list(of: Converter(a)) -> Converter(List(a)) {
               _, Error(errs) | Error(errs), _ -> Error(errs)
             }
           })
-        other -> Error([dynamic.DecodeError("ListValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("ListValue", get_type(other), [])])
       }
     },
     List(of.type_def),
@@ -270,7 +302,7 @@ pub fn optional(of: Converter(a)) -> Converter(option.Option(a)) {
         OptionalValue(option.Some(val)) ->
           val |> of.decoder |> result.map(option.Some)
         other ->
-          Error([dynamic.DecodeError("OptionalValue", get_type(other), [])])
+          Error([decode.DecodeError("OptionalValue", get_type(other), [])])
       }
     },
     Optional(of.type_def),
@@ -296,8 +328,7 @@ pub fn result(
       case v {
         ResultValue(Ok(val)) -> val |> res.decoder |> result.map(Ok)
         ResultValue(Error(val)) -> val |> error.decoder |> result.map(Error)
-        other ->
-          Error([dynamic.DecodeError("ResultValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("ResultValue", get_type(other), [])])
       }
     },
     Result(res.type_def, error.type_def),
@@ -349,7 +380,7 @@ pub fn dict(
             }
           })
           |> result.map(dict.from_list)
-        other -> Error([dynamic.DecodeError("DictValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("DictValue", get_type(other), [])])
       }
     },
     Dict(key.type_def, value.type_def),
@@ -422,7 +453,7 @@ pub fn enum(
             converters
             |> list.key_find(variant_name)
             |> result.replace_error([
-              dynamic.DecodeError(
+              decode.DecodeError(
                 "One of: "
                   <> converters |> list.map(fn(v) { v.0 }) |> string.join("/"),
                 variant_name,
@@ -432,7 +463,7 @@ pub fn enum(
           )
           variant.decoder(value)
         }
-        other -> Error([dynamic.DecodeError("EnumValue", get_type(other), [])])
+        other -> Error([decode.DecodeError("EnumValue", get_type(other), [])])
       }
     },
     Enum(converters |> list.map(fn(var) { #(var.0, { var.1 }.type_def) })),
@@ -440,38 +471,6 @@ pub fn enum(
       let assert [first, ..] = converters
       { first.1 }.default_value
     },
-  )
-}
-
-/// Basic converter for Dynamic values
-pub fn dynamic() -> Converter(dynamic.Dynamic) {
-  Converter(
-    fn(v: dynamic.Dynamic) { DynamicValue(v) },
-    fn(v: GlitrValue) {
-      case v {
-        DynamicValue(val) -> Ok(val)
-        other ->
-          Error([dynamic.DecodeError("DynamicValue", get_type(other), [])])
-      }
-    },
-    Dynamic,
-    dynamic.from(Nil),
-  )
-}
-
-/// Basic converter for BitArray values
-pub fn bit_array() -> Converter(BitArray) {
-  Converter(
-    fn(v: BitArray) { BitArrayValue(v) },
-    fn(v: GlitrValue) {
-      case v {
-        BitArrayValue(val) -> Ok(val)
-        other ->
-          Error([dynamic.DecodeError("BitArrayValue", get_type(other), [])])
-      }
-    },
-    BitArray,
-    <<>>,
   )
 }
 
@@ -494,15 +493,15 @@ pub fn bit_array() -> Converter(BitArray) {
 ///         [y, m, d, ..] -> Ok(Date(y, m, d))
 ///         _ -> Error([])
 ///       },
+///       Date(0, 0, 0) // This is required for now...
 ///     }
-///     Date(0, 0, 0) // This is required for now...
 ///   )
 /// }
 /// ```
 pub fn map(
   converter: Converter(a),
   encode_map: fn(b) -> a,
-  decode_map: fn(a) -> Result(b, List(dynamic.DecodeError)),
+  decode_map: fn(a) -> Result(b, List(decode.DecodeError)),
   default_value: b,
   // Kinda required until I find a more elegant way around this
 ) -> Converter(b) {
@@ -527,14 +526,14 @@ fn get_type(val: GlitrValue) -> String {
     EnumValue(_, _) -> "EnumValue"
     FloatValue(_) -> "FloatValue"
     IntValue(_) -> "IntValue"
+    DynamicValue(_) -> "DynamicValue"
+    BitArrayValue(_) -> "BitArrayValue"
     ListValue(_) -> "ListValue"
     NullValue -> "NullValue"
     ObjectValue(_) -> "ObjectValue"
     OptionalValue(_) -> "OptionalValue"
     ResultValue(_) -> "ResultValue"
     StringValue(_) -> "StringValue"
-    DynamicValue(_) -> "DynamicValue"
-    BitArrayValue(_) -> "BitArrayValue"
   }
 }
 
@@ -547,11 +546,27 @@ pub fn encode(converter: Converter(a)) -> fn(a) -> GlitrValue {
 /// Decode a GlitrValue using the provided converter.
 pub fn decode(
   converter: Converter(a),
-) -> fn(GlitrValue) -> Result(a, List(dynamic.DecodeError)) {
+) -> fn(GlitrValue) -> Result(a, List(decode.DecodeError)) {
   converter.decoder
 }
 
 /// Return the GlitrType associated with the converter
 pub fn type_def(converter: Converter(a)) -> GlitrType {
   converter.type_def
+}
+
+/// Retrieve the default value associated with a converter.
+/// 
+/// This value is used as a fallback when decoding fails,
+/// especially when building decoders that must return a value
+/// even in the presence of errors.
+///
+/// ## Example
+/// ```
+/// let string_conv = string()
+/// let default = default_value(string_conv)
+/// // default == ""
+/// ```
+pub fn default_value(conv: Converter(a)) -> a {
+  conv.default_value
 }
