@@ -568,6 +568,5 @@ pub fn type_def(converter: Converter(a)) -> GlitrType {
 /// // default == ""
 /// ```
 pub fn default_value(conv: Converter(a)) -> a {
-  let Converter(_, _, _, default) = conv
-  default
+  conv.default_value
 }

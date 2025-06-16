@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 1.0.2 - 16/06/2025
+
+**Features**
+
+- Added the default_value function to get a converter's default value
+
+**Changes**
+
+- Update to stdlib 0.60.0
+
 ## 1.0.1 - 28/12/2024
 
 **Features**
